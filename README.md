@@ -116,16 +116,34 @@ $ yay -S greetd-tuigreet-fork-git
 
 ### With Nix
 
-The primary method of installing tuigreet and even developing it is _Nix_. We
-provide a Nix flake to build the package from source using Nix. The easiest way
-of using the flake would be to create an overlay for yourself, overriding
-`pkgs.tuigreet` with the flake package. Simply point `tuigreet` to
-`inputs.tuigreet.packages.${prev.hostPlatform.system}.tuigreet` instead of
-overriding the `src`. This will completely replace the derivation, and build
-with the correct source automatically. In most cases **this is preferred to
-overwriting the Nixpkgs derivation**.
+Nix is the primary method of installing, and often times _developing_, tuigreet.
 
-This fork is not packaged in Nixpkgs, but it is trivial to use the Nixpkgs
+#### From Nixpkgs
+
+Nixpkgs provides a `pkgs.tuigreet` that you can use to install tuigreet on your
+system, using the greetd module under `services.greetd`:
+
+```nix
+{
+  services.greetd = {
+    enable = true;
+    settings = {
+      default_session = {
+        user = "greeter";
+        command = getExe' pkgs.tuigreet "tuigreet"; # you may pass `--config` here
+      };
+    };
+  };
+}
+```
+
+#### Using Flakes
+
+Alternatively, you may use Nix flakes to build the package from source using
+Nix. Use the package exposed by `packages.<system>` as, e.g.,
+`inputs.tuigreet.packages.${prev.hostPlatform.system}.tuigreet`.
+
+To get development versions of tuigreet it is trivial to use the Nixpkgs
 derivation with the updated source information, should you wish to run it. For
 example, you may create an overlay to override `pkgs.tuigreet` as follows:
 
@@ -156,9 +174,8 @@ example, you may create an overlay to override `pkgs.tuigreet` as follows:
 ]
 ```
 
-Please keep in mind that packaging steps might change in the future. You are
-encouraged to use the package provided by the flake unless you have a really
-good reason not to.
+Once applying the overlay as you see fit, you may use the greetd module as
+described above.
 
 ### From source
 
