@@ -176,6 +176,13 @@ fn apply_config_layer(dest: &mut Config, src: Config) {
   if src.layout.prompt_padding != defaults.layout.prompt_padding {
     dest.layout.prompt_padding = src.layout.prompt_padding;
   }
+  // Brand widget
+  if src.brand.path != defaults.brand.path {
+    dest.brand.path = src.brand.path.clone();
+  }
+  if src.brand.align != defaults.brand.align {
+    dest.brand.align = src.brand.align.clone();
+  }
   if src.layout.widgets.time_position != defaults.layout.widgets.time_position {
     dest.layout.widgets.time_position = src.layout.widgets.time_position;
   }
@@ -312,7 +319,58 @@ fn apply_config_layer(dest: &mut Config, src: Config) {
   if src.background.matrix.mutate_chance.is_some() {
     dest.background.matrix.mutate_chance = src.background.matrix.mutate_chance;
   }
-
+  if src.background.aurora.color_a.is_some() {
+    dest.background.aurora.color_a = src.background.aurora.color_a.clone();
+  }
+  if src.background.aurora.color_b.is_some() {
+    dest.background.aurora.color_b = src.background.aurora.color_b.clone();
+  }
+  if src.background.aurora.coverage.is_some() {
+    dest.background.aurora.coverage = src.background.aurora.coverage;
+  }
+  if src.background.aurora.speed.is_some() {
+    dest.background.aurora.speed = src.background.aurora.speed;
+  }
+  if src.background.starfield.min_speed.is_some() {
+    dest.background.starfield.min_speed = src.background.starfield.min_speed;
+  }
+  if src.background.starfield.max_speed.is_some() {
+    dest.background.starfield.max_speed = src.background.starfield.max_speed;
+  }
+  if src.background.starfield.twinkle_rate.is_some() {
+    dest.background.starfield.twinkle_rate = src.background.starfield.twinkle_rate;
+  }
+  if src.background.starfield.palette.is_some() {
+    dest.background.starfield.palette =
+      src.background.starfield.palette.clone();
+  }
+  if src.background.constellation.star_color.is_some() {
+    dest.background.constellation.star_color =
+      src.background.constellation.star_color.clone();
+  }
+  if src.background.constellation.edge_color.is_some() {
+    dest.background.constellation.edge_color =
+      src.background.constellation.edge_color.clone();
+  }
+  if src.background.constellation.dim_color.is_some() {
+    dest.background.constellation.dim_color =
+      src.background.constellation.dim_color.clone();
+  }
+  if src.background.constellation.speed.is_some() {
+    dest.background.constellation.speed = src.background.constellation.speed;
+  }
+  if src.background.fog.speed.is_some() {
+    dest.background.fog.speed = src.background.fog.speed;
+  }
+  if src.background.fog.scale.is_some() {
+    dest.background.fog.scale = src.background.fog.scale;
+  }
+  if src.background.fog.dim.is_some() {
+    dest.background.fog.dim = src.background.fog.dim.clone();
+  }
+  if src.background.fog.bright.is_some() {
+    dest.background.fog.bright = src.background.fog.bright.clone();
+  }
   // Outputs: a non-empty list from a higher-priority layer fully replaces
   if !src.outputs.is_empty() {
     dest.outputs = src.outputs;
@@ -344,6 +402,9 @@ fn apply_config_layer(dest: &mut Config, src: Config) {
   }
   if src.theme.greet.is_some() {
     dest.theme.greet = src.theme.greet;
+  }
+  if src.theme.brand.is_some() {
+    dest.theme.brand = src.theme.brand;
   }
   if src.theme.prompt.is_some() {
     dest.theme.prompt = src.theme.prompt;
@@ -541,14 +602,18 @@ pub fn extract_cli_config(matches: &getopts::Matches) -> Config {
   if let Some(greeting) = matches.opt_str("greeting") {
     config.display.greeting = Some(greeting);
   }
-  if matches.opt_present("issue") {
-    config.display.issue = true;
-  }
-  if matches.opt_present("battery") {
-    config.display.battery = true;
-  }
   if let Some(align) = matches.opt_str("greet-align") {
     config.display.align_greeting = match align.as_str() {
+      "left" => AlignGreeting::Left,
+      "right" => AlignGreeting::Right,
+      _ => AlignGreeting::Center,
+    };
+  }
+  if let Some(path) = matches.opt_str("brand") {
+    config.brand.path = Some(PathBuf::from(path));
+  }
+  if let Some(align) = matches.opt_str("brand-align") {
+    config.brand.align = match align.as_str() {
       "left" => AlignGreeting::Left,
       "right" => AlignGreeting::Right,
       _ => AlignGreeting::Center,
@@ -866,6 +931,16 @@ impl Config {
     // Both cols and rows must be set together
     if let Some(reason) = self.terminal.invalid_reason() {
       return Err(ConfigError::Validation(reason));
+    }
+
+    // Validate [brand]: path must be readable when set.
+    if let Some(path) = &self.brand.path
+      && !path.is_file()
+    {
+      return Err(ConfigError::Validation(format!(
+        "brand.path '{}' is not a readable file",
+        path.display()
+      )));
     }
 
     // Add validation warnings for potentially problematic configurations
@@ -1607,5 +1682,77 @@ session_wrapper = "   "
       "system remember.username must survive"
     );
     assert_eq!(config.display.greeting, Some("hello".to_string()));
+  }
+
+  #[test]
+  fn test_brand_layering() {
+    let mut config = Config::default();
+    assert!(config.brand.path.is_none());
+    assert_eq!(config.brand.align, AlignGreeting::Center);
+
+    let mut layer = Config::default();
+    layer.brand.path = Some(PathBuf::from("/etc/brand.txt"));
+    layer.brand.align = AlignGreeting::Left;
+    apply_config_layer(&mut config, layer);
+
+    assert_eq!(config.brand.path, Some(PathBuf::from("/etc/brand.txt")));
+    assert_eq!(config.brand.align, AlignGreeting::Left);
+  }
+
+  #[test]
+  fn test_brand_layer_preserved_when_higher_uses_default() {
+    // System sets a brand path; user layer doesn't touch brand.
+    let mut config = Config::default();
+    config.brand.path = Some(PathBuf::from("/etc/brand.txt"));
+
+    let user = Config::default();
+    apply_config_layer(&mut config, user);
+
+    assert_eq!(
+      config.brand.path,
+      Some(PathBuf::from("/etc/brand.txt")),
+      "system brand.path must survive an empty user layer"
+    );
+  }
+
+  #[test]
+  fn test_brand_theme_color_layering() {
+    let mut config = Config::default();
+    assert!(config.theme.brand.is_none());
+
+    let mut layer = Config::default();
+    layer.theme.brand = Some("red".to_string());
+    apply_config_layer(&mut config, layer);
+
+    assert_eq!(config.theme.brand, Some("red".to_string()));
+  }
+
+  #[test]
+  fn test_brand_validate_missing_file() {
+    let mut config = Config::default();
+    config.brand.path = Some(PathBuf::from("/this/does/not/exist/anywhere"));
+    let result = config.validate(false);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(
+      matches!(err, ConfigError::Validation(ref msg) if msg.contains("brand.path")),
+      "expected brand.path validation error, got {err:?}"
+    );
+  }
+
+  #[test]
+  fn test_brand_validate_directory_is_rejected() {
+    // /tmp exists but is a directory, not a readable file.
+    let mut config = Config::default();
+    config.brand.path = Some(PathBuf::from("/tmp"));
+    let result = config.validate(false);
+    assert!(result.is_err(), "directory must be rejected as brand path");
+  }
+
+  #[test]
+  fn test_brand_validate_no_path_ok() {
+    let config = Config::default();
+    let result = config.validate(false);
+    assert!(result.is_ok(), "absent brand.path should be a no-op");
   }
 }

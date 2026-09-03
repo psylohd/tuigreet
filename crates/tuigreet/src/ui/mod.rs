@@ -26,15 +26,14 @@ use tokio::sync::RwLock;
 use tui::{
   Frame as CrosstermFrame,
   Terminal,
-  layout::{Constraint, Direction, Layout},
+  layout::{Alignment, Constraint, Direction, Layout},
   style::Modifier,
-  text::{Line, Span},
-  widgets::Paragraph,
+  text::{Line, Span, Text},
+  widgets::{Clear, Paragraph},
 };
-use tuigreet_config::{BatteryPosition, WidgetPosition};
+use tuigreet_config::{AlignGreeting, BatteryPosition, WidgetPosition};
 use tuigreet_types::Mode;
 use util::buttonize;
-
 use self::common::style::{Theme, Themed};
 pub use self::i18n::MESSAGES;
 use crate::{
@@ -83,12 +82,24 @@ where
 
   terminal.draw(|f| {
     let area = f.area();
+    // Snapshot + bump the animation tick counter BEFORE taking the
+    // mutable borrow of `greeter.animation`, so we don't fight
+    // overlapping borrows.
+    let tick = if greeter.animation.is_some() {
+      let next = greeter.frame_counter.wrapping_add(1);
+      greeter.frame_counter = next;
+      next
+    } else {
+      greeter.frame_counter
+    };
     if let Some(anim) = greeter.animation.as_mut() {
       anim.resize(area);
-      anim.step();
+      let divider = anim.frame_divider().max(1);
+      if divider <= 1 || tick % u64::from(divider) == 0 {
+        anim.step();
+      }
       anim.render(area, f.buffer_mut());
     }
-
     let theme = &greeter.theme;
     let size = area;
     let time_position = get_widget_position(&greeter, "time");
@@ -107,6 +118,7 @@ where
     let mut info_top_slot = None;
     let mut time_bottom_slot = None;
     let mut status_slot = None;
+    let mut brand_slot = None;
 
     // Top padding
     constraints.push(Constraint::Length(greeter.window_padding()));
@@ -123,10 +135,33 @@ where
       constraints.push(Constraint::Length(1));
     }
 
+    // Brand widget: a multi-line block above the main area. The slot is
+    // omitted when there are no lines to draw. We reserve space for the
+    // auth window's minimum height so the prompt never gets crushed.
+    if !greeter.brand_lines.is_empty() {
+      let brand_lines = greeter.brand_lines.len() as u16;
+      // Reserve enough for the auth window's minimum: container padding
+      // both sides + at least one line for the prompt + message area.
+      let reserved = greeter
+        .container_padding()
+        .saturating_mul(2)
+        .saturating_add(4);
+      let available = size
+        .height
+        .saturating_sub(2 * greeter.window_padding())
+        .saturating_sub(reserved);
+      // The brand block never needs more than half the available rows.
+      let cap = (available / 2).max(1);
+      let brand_height = brand_lines.min(available).min(cap);
+      if brand_height > 0 {
+        brand_slot = Some(constraints.len());
+        constraints.push(Constraint::Length(brand_height));
+      }
+    }
+
     // Main content area
     let main_slot = constraints.len();
     constraints.push(Constraint::Min(1));
-
     // Status at bottom (default behavior)
     if matches!(
       status_position,
@@ -250,7 +285,47 @@ where
       );
     }
 
-    // Render status bar if not hidden
+    // Render brand widget above the main area, if any lines were loaded.
+    //
+    // The brand is drawn with `Buffer::set_string` per line rather than
+    // a `Paragraph` so only the cells that actually hold a brand
+    // character are written. The cells around the brand text keep
+    // whatever the background animation painted there — a `Paragraph`
+    // would otherwise fill the whole brand rect with spaces, wiping
+    // the fog to the terminal default background and producing a
+    // visible "box" around the brand.
+    if let Some(slot) = brand_slot {
+      let brand_style = theme.of(&[Themed::Brand]);
+
+      // For each loaded line, compute its display width and the
+      // horizontal offset that puts it at the configured alignment
+      // within the brand slot. Then write the text directly into the
+      // buffer at that offset; cells outside the text are left
+      // untouched so the animation behind them shows through.
+      let slot_area = chunks[slot];
+      let slot_x = slot_area.x + greeter.window_padding();
+      let slot_w = slot_area
+        .width
+        .saturating_sub(2 * greeter.window_padding());
+
+      for (i, line) in greeter.brand_lines.iter().enumerate() {
+        let y = slot_area.y + i as u16;
+        if y >= slot_area.y + slot_area.height {
+          break;
+        }
+        let w = line.chars().count() as u16;
+        if w == 0 || w > slot_w {
+          continue;
+        }
+        let x = match greeter.brand_align {
+          AlignGreeting::Left => slot_x,
+          AlignGreeting::Right => slot_x + slot_w - w,
+          AlignGreeting::Center => slot_x + (slot_w - w) / 2,
+        };
+        f.buffer_mut().set_string(x, y, line.as_str(), brand_style);
+      }
+    }
+
     if let Some(slot) = status_slot {
       let status_block_size_right = fl!("status_caps").chars().count() as u16;
 

@@ -1,4 +1,5 @@
 use std::env;
+use std::path::PathBuf;
 
 use crate::{
   Config,
@@ -6,6 +7,7 @@ use crate::{
 };
 
 /// Apply environment variable overrides to configuration.
+
 ///
 /// Supported variables: `TUIGREET_DEBUG`, `TUIGREET_LOG_FILE`,
 /// `TUIGREET_SESSION_COMMAND`, etc. Invalid boolean values are logged as
@@ -519,6 +521,29 @@ pub fn load_env_variables() -> Config {
   if let Ok(value) = env::var("TUIGREET_THEME_BUTTON") {
     config.theme.button = Some(value);
   }
+  if let Ok(value) = env::var("TUIGREET_THEME_BRAND") {
+    config.theme.brand = Some(value);
+  }
+
+  // Brand widget
+  if let Ok(value) = env::var("TUIGREET_BRAND_PATH") {
+    config.brand.path = Some(PathBuf::from(value));
+  }
+  if let Ok(value) = env::var("TUIGREET_BRAND_ALIGN") {
+    match value.to_lowercase().as_str() {
+      "left" => config.brand.align = AlignGreeting::Left,
+      "center" => config.brand.align = AlignGreeting::Center,
+      "right" => config.brand.align = AlignGreeting::Right,
+      _ => {
+        tracing::warn!(
+          "Invalid TUIGREET_BRAND_ALIGN value: '{}', expected 'left', \
+           'center', or 'right'",
+          value
+        );
+      },
+    }
+  }
+
   config
 }
 

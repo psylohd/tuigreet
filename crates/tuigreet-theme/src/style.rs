@@ -21,6 +21,7 @@ pub enum Themed {
   Input,
   Action,
   ActionButton,
+  Brand,
 }
 
 /// Color theme for all UI elements
@@ -36,6 +37,7 @@ pub struct Theme {
   input:     Option<(Component, Color)>,
   action:    Option<(Component, Color)>,
   button:    Option<(Component, Color)>,
+  brand:     Option<(Component, Color)>,
 }
 
 impl Theme {
@@ -66,15 +68,16 @@ impl Theme {
       if let Ok(color) = Color::from_str(value) {
         match key {
           "container" => style.container = Some((Bg, color)),
-          "time" => style.time = Some((Fg, color)),
-          "text" => style.text = Some((Fg, color)),
-          "border" => style.border = Some((Fg, color)),
-          "title" => style.title = Some((Fg, color)),
-          "greet" => style.greet = Some((Fg, color)),
-          "prompt" => style.prompt = Some((Fg, color)),
-          "input" => style.input = Some((Fg, color)),
-          "action" => style.action = Some((Fg, color)),
-          "button" => style.button = Some((Fg, color)),
+          "time"      => style.time      = Some((Fg, color)),
+          "text"      => style.text      = Some((Fg, color)),
+          "border"    => style.border    = Some((Fg, color)),
+          "title"     => style.title     = Some((Fg, color)),
+          "greet"     => style.greet     = Some((Fg, color)),
+          "prompt"    => style.prompt    = Some((Fg, color)),
+          "input"     => style.input     = Some((Fg, color)),
+          "action"    => style.action    = Some((Fg, color)),
+          "button"    => style.button    = Some((Fg, color)),
+          "brand"     => style.brand     = Some((Fg, color)),
           _ => {},
         }
       }
@@ -112,6 +115,7 @@ impl Theme {
       Action,
       ActionButton,
       Border,
+      Brand,
       Container,
       Greet,
       Input,
@@ -132,6 +136,7 @@ impl Theme {
       Input => &self.input,
       Action => &self.action,
       ActionButton => &self.button,
+      Brand => &self.brand,
     };
 
     match color {

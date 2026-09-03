@@ -36,6 +36,9 @@ pub fn theme_from_config(theme_config: &ThemeConfig) -> Theme {
   if let Some(ref color) = theme_config.greet {
     spec_parts.push(format!("greet={color}"));
   }
+  if let Some(ref color) = theme_config.brand {
+    spec_parts.push(format!("brand={color}"));
+  }
   if let Some(ref color) = theme_config.prompt {
     spec_parts.push(format!("prompt={color}"));
   }

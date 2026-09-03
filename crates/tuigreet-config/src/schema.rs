@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 /// Root configuration structure
@@ -28,6 +30,10 @@ pub struct Config {
 
   #[serde(default)]
   pub layout: LayoutConfig,
+
+  /// Brand widget rendered above the auth window.
+  #[serde(default)]
+  pub brand: BrandConfig,
 
   #[serde(default)]
   pub power: PowerConfig,
@@ -342,6 +348,29 @@ impl Default for LayoutConfig {
   }
 }
 
+/// Brand widget rendered above the auth window.
+///
+/// The widget reads its content from a UTF-8 text file (`path`). Each line of
+/// the file becomes a render row. Lines that exceed the available width are
+/// clipped by the renderer; lines beyond the available height are dropped.
+/// The widget is disabled when `path` is `None` or the file is empty.
+///
+/// Example:
+/// ```toml
+/// [brand]
+/// path = "/etc/tuigreet/brand.txt"
+/// align = "center"
+/// ```
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
+pub struct BrandConfig {
+  /// Path to the brand file. `None` disables the widget.
+  #[serde(default)]
+  pub path:  Option<PathBuf>,
+  /// Alignment of the rendered block within the available width.
+  #[serde(default)]
+  pub align: AlignGreeting,
+}
+
 /// Battery widget placement
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -505,6 +534,9 @@ pub struct ThemeConfig {
   /// Greeting text color
   #[serde(default)]
   pub greet:     Option<String>,
+  /// Brand widget color
+  #[serde(default)]
+  pub brand:     Option<String>,
   /// Prompt text color
   #[serde(default)]
   pub prompt:    Option<String>,
@@ -542,13 +574,27 @@ pub struct BackgroundConfig {
   /// Parameters for the cmatrix-style digital rain effect.
   #[serde(default)]
   pub matrix: MatrixConfig,
+
+  /// Parameters for the aurora borealis effect.
+  #[serde(default)]
+  pub aurora: AuroraConfig,
+
+  #[serde(default)]
+  pub starfield: StarfieldConfig,
+
+  /// Parameters for the constellation map effect.
+  #[serde(default)]
+  pub constellation: ConstellationConfig,
+
+  /// Parameters for the drifting fog effect.
+  #[serde(default)]
+  pub fog: FogConfig,
 }
 
 /// Parameters for the DOOM-style fire animation. Field names mirror Ly's
 /// `doom_fire_*` config keys.
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 pub struct DoomConfig {
-  /// Decay control (1..=9). Higher = taller flames.
   #[serde(default)]
   pub height: Option<u8>,
 
@@ -608,7 +654,96 @@ pub struct MatrixConfig {
   pub mutate_chance: Option<f32>,
 }
 
-/// Greeting alignment options
+/// Parameters for the aurora borealis animation.
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
+pub struct AuroraConfig {
+  /// Color of the first curtain at peak intensity. Accepts `#RRGGBB`,
+  /// `0xRRGGBB`, or any ratatui color name.
+  #[serde(default)]
+  pub color_a: Option<String>,
+
+  /// Color of the second curtain at peak intensity.
+  #[serde(default)]
+  pub color_b: Option<String>,
+
+  /// Vertical band coverage, `0.0..=1.0`. `0.6` means curtains fade
+  /// to zero by 60% of the way down — the bottom 40% stays dark.
+  #[serde(default)]
+  pub coverage: Option<f32>,
+
+  /// Drift speed multiplier. `1.0` is default; raise for faster.
+  #[serde(default)]
+  pub speed: Option<f32>,
+}
+
+/// Parameters for the drifting starfield animation.
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
+pub struct StarfieldConfig {
+  /// so a tiny terminal isn't over-saturated.
+  #[serde(default)]
+  pub density: Option<u32>,
+
+  /// Inclusive minimum drift speed, in cells per frame.
+  #[serde(default)]
+  pub min_speed: Option<f32>,
+
+  /// Inclusive maximum drift speed, in cells per frame.
+  #[serde(default)]
+  pub max_speed: Option<f32>,
+
+  /// Per-frame, per-star probability of a brightness band shift.
+  /// `0.0` disables twinkle; `1.0` is full strobe.
+  #[serde(default)]
+  pub twinkle_rate: Option<f32>,
+
+  /// Brightness ramp from dimmest to brightest, sampled per star per
+  /// frame. Accepts any color string the rest of the config accepts.
+  #[serde(default)]
+  pub palette: Option<Vec<String>>,
+}
+
+/// Parameters for the constellation map animation.
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
+pub struct ConstellationConfig {
+  /// Color of the static star dots.
+  #[serde(default)]
+  pub star_color: Option<String>,
+
+  /// Color of fully-bright edges. Dimmed edges blend toward
+  /// `dim_color`.
+  #[serde(default)]
+  pub edge_color: Option<String>,
+
+  /// Color that a fully-dimmed edge fades to. `Color::Reset` is
+  /// accepted (use `"reset"` or `"default"`).
+  #[serde(default)]
+  pub dim_color: Option<String>,
+
+  /// Shimmer speed multiplier. `1.0` is default.
+  #[serde(default)]
+  pub speed: Option<f32>,
+}
+
+/// Parameters for the drifting fog animation.
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
+pub struct FogConfig {
+  /// Drift speed multiplier. `1.0` is default.
+  #[serde(default)]
+  pub speed: Option<f32>,
+
+  /// Density of the field's spatial frequency. `1.0` is default.
+  /// Lower = larger blobs; higher = finer texture.
+  #[serde(default)]
+  pub scale: Option<f32>,
+
+  /// Color of the dimmest visible glyph.
+  #[serde(default)]
+  pub dim: Option<String>,
+
+  /// Color of the brightest glyph.
+  #[serde(default)]
+  pub bright: Option<String>,
+}
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AlignGreeting {

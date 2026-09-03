@@ -66,7 +66,7 @@ pub fn draw_with_area(
   let mut block = Block::default()
     .title_style(theme.of(&[Themed::Title]))
     .style(theme.of(&[Themed::Container]))
-    .borders(Borders::ALL)
+    .borders(Borders::NONE)
     .border_type(BorderType::Plain)
     .border_style(theme.of(&[Themed::Border]));
 

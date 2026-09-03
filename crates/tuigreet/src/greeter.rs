@@ -138,9 +138,15 @@ pub struct Greeter {
   pub greeting:    Option<String>,
   // Container's title configuration
   pub title:       TitleOption,
+  // Brand widget path, loaded lines, and alignment.
+  // `brand_lines` is the source of truth the renderer reads; the file is
+  // read once on `apply_config` so a missing or unreadable file at render
+  // time is impossible (validation gates that earlier).
+  pub brand_path:  Option<PathBuf>,
+  pub brand_lines: Vec<String>,
+  pub brand_align: tuigreet_config::AlignGreeting,
   // Transaction message to show to the user.
   pub message:     Option<String>,
-
   // Menu for power options.
   pub powers:       Menu<Power>,
   // Whether to prefix the power commands with `setsid`.
@@ -163,11 +169,14 @@ pub struct Greeter {
   pub animation:     Option<Box<dyn Animation>>,
   // Configured animation FPS, when an animation is active.
   pub animation_fps: Option<u32>,
+  // Monotonic counter of render ticks that touched the animation
+  // block; used to throttle per-animation `step()` via `frame_divider`.
+  // Wraps on overflow; only its value mod `divider` matters.
+  pub frame_counter: u64,
   // Skip greetd socket and simulate auth flow locally for UI testing
   pub mock:          bool,
   // Menu for the on-the-fly background switcher (F4 by default).
   pub backgrounds:   Menu<Background>,
-
   // The software is waiting for a response from `greetd`.
   pub working: bool,
   // We are done working.
@@ -215,6 +224,9 @@ impl Default for Greeter {
       battery:                    false,
       greeting:                   None,
       title:                      Default::default(),
+      brand_path:                 None,
+      brand_lines:                Vec::new(),
+      brand_align:                tuigreet_config::AlignGreeting::Center,
       message:                    None,
       powers:                     Menu::default(),
       power_setsid:               false,
@@ -231,6 +243,7 @@ impl Default for Greeter {
       status_show_caps_lock:      true,
       animation:                  None,
       animation_fps:              None,
+      frame_counter:              0,
       mock:                       false,
       backgrounds:                Menu::default(),
       working:                    false,
@@ -764,6 +777,20 @@ impl Greeter {
 
     opts.optopt(
       "",
+      "brand",
+      "path to a UTF-8 text file rendered as a brand widget above the auth \
+       window",
+      "PATH",
+    );
+    opts.optopt(
+      "",
+      "brand-align",
+      "alignment of the brand widget (default: 'center')",
+      "[left|center|right]",
+    );
+
+    opts.optopt(
+      "",
       "power-shutdown",
       "command to run to shut down the system",
       "'CMD [ARGS]...'",
@@ -826,7 +853,7 @@ impl Greeter {
     opts.optopt(
       "",
       "background",
-      "background animation to render behind the login UI ('doom' or 'none')",
+      "background animation to render behind the login UI ('doom', 'matrix', 'starfield', 'aurora', 'constellation', 'fog', or 'none')",
       "NAME",
     );
     opts.optopt(
@@ -1180,7 +1207,7 @@ impl Greeter {
     &mut self,
     cfg: &tuigreet_config::BackgroundConfig,
   ) {
-    use crate::ui::bg_animation::{Kind, doom, matrix};
+    use crate::ui::bg_animation::{Kind, aurora, constellation, doom, fog, matrix, starfield};
 
     let Some(kind) = cfg.kind.as_deref().and_then(Kind::from_name) else {
       if let Some(name) = cfg.kind.as_deref()
@@ -1226,6 +1253,62 @@ impl Greeter {
           min_speed:     cfg.matrix.min_speed.unwrap_or(d.min_speed),
           max_speed:     cfg.matrix.max_speed.unwrap_or(d.max_speed),
           mutate_chance: cfg.matrix.mutate_chance.unwrap_or(d.mutate_chance),
+        })
+      },
+      Kind::Starfield => {
+        let d = starfield::Options::default();
+        // Palette comes from config as a list of color strings. Any
+        // unparseable entry is skipped; an empty palette falls back to
+        // the default ramp.
+        let palette = cfg
+          .starfield
+          .palette
+          .as_deref()
+          .map(|strings| {
+            strings
+              .iter()
+              .filter_map(|s| bg_animation::parse_color(s))
+              .collect::<Vec<_>>()
+          })
+          .unwrap_or_else(|| d.palette.clone());
+        let palette = if palette.is_empty() {
+          d.palette
+        } else {
+          palette
+        };
+        AnimationSpec::Starfield(starfield::Options {
+          density:      cfg.starfield.density.unwrap_or(d.density),
+          min_speed:    cfg.starfield.min_speed.unwrap_or(d.min_speed),
+          max_speed:    cfg.starfield.max_speed.unwrap_or(d.max_speed),
+          twinkle_rate: cfg.starfield.twinkle_rate.unwrap_or(d.twinkle_rate),
+          palette,
+        })
+      },
+      Kind::Aurora => {
+        let d = aurora::Options::default();
+        AnimationSpec::Aurora(aurora::Options {
+          color_a:  parse(&cfg.aurora.color_a, d.color_a),
+          color_b:  parse(&cfg.aurora.color_b, d.color_b),
+          coverage: cfg.aurora.coverage.unwrap_or(d.coverage),
+          speed:    cfg.aurora.speed.unwrap_or(d.speed),
+        })
+      },
+      Kind::Constellation => {
+        let d = constellation::Options::default();
+        AnimationSpec::Constellation(constellation::Options {
+          star_color: parse(&cfg.constellation.star_color, d.star_color),
+          edge_color: parse(&cfg.constellation.edge_color, d.edge_color),
+          dim_color:  parse(&cfg.constellation.dim_color, d.dim_color),
+          speed:      cfg.constellation.speed.unwrap_or(d.speed),
+        })
+      },
+      Kind::Fog => {
+        let d = fog::Options::default();
+        AnimationSpec::Fog(fog::Options {
+          speed:  cfg.fog.speed.unwrap_or(d.speed),
+          scale:  cfg.fog.scale.unwrap_or(d.scale),
+          dim:    parse(&cfg.fog.dim, d.dim),
+          bright: parse(&cfg.fog.bright, d.bright),
         })
       },
     };
@@ -1409,6 +1492,15 @@ impl Greeter {
     // Animation
     self.set_background_from_config(&config.background);
     self.populate_backgrounds_menu();
+    // Brand widget
+    self.brand_path = config.brand.path.clone();
+    self.brand_align = config.brand.align.clone();
+    self.brand_lines = self
+      .brand_path
+      .as_deref()
+      .and_then(|path| std::fs::read_to_string(path).ok())
+      .map(|contents| contents.lines().map(str::to_owned).collect())
+      .unwrap_or_default();
   }
 
   pub fn reload_sessions(&mut self) {

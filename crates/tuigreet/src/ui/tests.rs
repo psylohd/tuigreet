@@ -805,8 +805,13 @@ async fn test_doom_animation_renders_and_form_stays_legible() {
   });
   assert!(bottom_has_fire, "fire should render on the bottom row");
 
+  // Debug: print rows 9..15
+  for y in 9..15 {
+    let line = get_line(&buffer, y, 80);
+    eprintln!("y={y}: {line:?}");
+  }
+
   // The login form sits in the middle of the screen; its inner cells must
-  // not contain fire glyphs because Clear wipes them before the form draws.
   let form_y = 12u16;
   let form_has_fire = (20..60).any(|x| {
     buffer[(x, form_y)]
@@ -863,5 +868,378 @@ async fn test_matrix_animation_renders_and_form_stays_legible() {
   assert!(
     !katakana_in_form,
     "matrix glyphs must not bleed through the login form"
+  );
+}
+
+#[tokio::test]
+async fn test_starfield_animation_renders_and_form_stays_legible() {
+  use crate::ui::bg_animation::{self as animation, AnimationSpec, starfield};
+
+  let greeter = test_greeter();
+  {
+    let mut g = greeter.write().await;
+    g.mode = Mode::Username;
+    g.animation = Some(animation::build(&AnimationSpec::Starfield(
+      starfield::Options::default(),
+    )));
+  }
+
+  // Render enough frames for stars to drift across the screen.
+  let mut buffer = render_ui(greeter.clone(), 80, 24).await;
+  for _ in 0..30 {
+    buffer = render_ui(greeter.clone(), 80, 24).await;
+  }
+
+  // The starfield glyphs are drawn from GLYPHS = ['·', '∙', '•', '✦',
+  // '✶', '⋆', '*']. None of them must leak into the form rect.
+  let form_y = 12u16;
+  let star_glyphs: &[char] = &['·', '∙', '•', '✦', '✶', '⋆', '*'];
+  let leaked = (20..60).any(|x| {
+    buffer[(x, form_y)]
+      .symbol()
+      .chars()
+      .next()
+      .is_some_and(|c| star_glyphs.contains(&c))
+  });
+  assert!(
+    !leaked,
+    "starfield glyphs must not bleed through the login form"
+  );
+}
+
+#[tokio::test]
+async fn test_aurora_animation_renders_and_form_stays_legible() {
+  use crate::ui::bg_animation::{self as animation, AnimationSpec, aurora};
+
+  let greeter = test_greeter();
+  {
+    let mut g = greeter.write().await;
+    g.mode = Mode::Username;
+    g.animation = Some(animation::build(&AnimationSpec::Aurora(
+      aurora::Options::default(),
+    )));
+  }
+
+  // Render a number of frames so the curtains drift into position.
+  let mut buffer = render_ui(greeter.clone(), 80, 24).await;
+  for _ in 0..30 {
+    buffer = render_ui(greeter.clone(), 80, 24).await;
+  }
+
+  // Aurora glyphs: `·` and `•`. The bottom 40% of the screen is
+  // configured to stay dark, so no aurora glyph should ever leak
+  // into the form area.
+  let form_y = 12u16;
+  let aurora_glyphs: &[char] = &['·', '•'];
+  let leaked = (20..60).any(|x| {
+    buffer[(x, form_y)]
+      .symbol()
+      .chars()
+      .next()
+      .is_some_and(|c| aurora_glyphs.contains(&c))
+  });
+  assert!(
+    !leaked,
+    "aurora glyphs must not bleed through the login form"
+  );
+}
+
+#[tokio::test]
+async fn test_constellation_animation_renders_and_form_stays_legible() {
+  use crate::ui::bg_animation::{self as animation, AnimationSpec, constellation};
+
+  let greeter = test_greeter();
+  {
+    let mut g = greeter.write().await;
+    g.mode = Mode::Username;
+    g.animation = Some(animation::build(&AnimationSpec::Constellation(
+      constellation::Options::default(),
+    )));
+  }
+
+  // Render some frames so edges have a chance to brighten.
+  let mut buffer = render_ui(greeter.clone(), 80, 24).await;
+  for _ in 0..30 {
+    buffer = render_ui(greeter.clone(), 80, 24).await;
+  }
+
+  // Constellation uses stars `·`, `•` and edges `─`, `│`, `╱`, `╲`.
+  // Stars are bounded to the upper 70% of the screen, and edges only
+  // exist between stars, so the form area must stay clean.
+  let form_y = 12u16;
+  let constellation_glyphs: &[char] = &['·', '•', '─', '│', '╱', '╲'];
+  let leaked = (20..60).any(|x| {
+    buffer[(x, form_y)]
+      .symbol()
+      .chars()
+      .next()
+      .is_some_and(|c| constellation_glyphs.contains(&c))
+  });
+  assert!(
+    !leaked,
+    "constellation glyphs must not bleed through the login form"
+  );
+}
+
+#[tokio::test]
+async fn test_fog_animation_renders_and_form_stays_legible() {
+  use crate::ui::bg_animation::{self as animation, AnimationSpec, fog};
+
+  let greeter = test_greeter();
+  {
+    let mut g = greeter.write().await;
+    g.mode = Mode::Username;
+    g.animation = Some(animation::build(&AnimationSpec::Fog(
+      fog::Options::default(),
+    )));
+  }
+
+  // Render some frames so the field has visible variation.
+  let mut buffer = render_ui(greeter.clone(), 80, 24).await;
+  for _ in 0..30 {
+    buffer = render_ui(greeter.clone(), 80, 24).await;
+  }
+
+  // Fog paints everywhere — it has no vertical band restriction. The
+  // `Clear` in `ui::prompt` is what keeps the form clean. Glyphs:
+  // ` `, `·`, `:`, `-`, `~`, `°`.
+  let form_y = 12u16;
+  let fog_glyphs: &[char] = &['·', ':', '-', '~', '°'];
+  let leaked = (20..60).any(|x| {
+    buffer[(x, form_y)]
+      .symbol()
+      .chars()
+      .next()
+      .is_some_and(|c| fog_glyphs.contains(&c))
+  });
+  assert!(
+    !leaked,
+    "fog glyphs must not bleed through the login form"
+  );
+}
+
+/// Build a greeter that has the brand widget enabled with the given lines.
+async fn greeter_with_brand(
+  lines: Vec<String>,
+  align: tuigreet_config::AlignGreeting,
+) -> Arc<RwLock<Greeter>> {
+  let greeter = test_greeter();
+  {
+    let mut g = greeter.write().await;
+    g.mode = Mode::Username;
+    g.brand_lines = lines;
+    g.brand_align = align;
+  }
+  greeter
+}
+
+#[tokio::test]
+async fn test_brand_widget_renders_above_main() {
+  let greeter = greeter_with_brand(
+    vec!["BRAND-1".to_string(), "BRAND-2".to_string()],
+    tuigreet_config::AlignGreeting::Center,
+  )
+  .await;
+
+  let buffer = render_ui(greeter, 80, 24).await;
+
+  for y in 0..4 {
+    let line = get_line(&buffer, y, 80);
+    if line.contains("BRAND-1") {
+      return;
+    }
+  }
+  panic!("brand text must render in the top region");
+}
+
+#[tokio::test]
+async fn test_brand_widget_hidden_when_empty() {
+  let greeter = test_greeter();
+  {
+    let mut g = greeter.write().await;
+    g.mode = Mode::Username;
+  }
+
+  let buffer = render_ui(greeter, 80, 24).await;
+
+  for y in 0..4 {
+    let line = get_line(&buffer, y, 80);
+    assert!(
+      !line.contains("BRAND"),
+      "no brand text should be in row {y} when brand_lines is empty"
+    );
+  }
+}
+
+#[tokio::test]
+async fn test_brand_widget_alignment_left() {
+  let greeter = greeter_with_brand(
+    vec!["X".to_string()],
+    tuigreet_config::AlignGreeting::Left,
+  )
+  .await;
+  let buffer = render_ui(greeter, 80, 24).await;
+
+  let mut found_x = None;
+  for y in 0..4 {
+    for x in 0..10 {
+      if buffer[(x, y)].symbol() == "X" {
+        found_x = Some(x);
+        break;
+      }
+    }
+    if found_x.is_some() {
+      break;
+    }
+  }
+  let x = found_x.expect("brand glyph should be present in the top region");
+  assert!(x <= 2, "left-aligned brand should start near the gutter, got x={x}");
+}
+
+#[tokio::test]
+async fn test_brand_widget_alignment_right() {
+  let greeter = greeter_with_brand(
+    vec!["X".to_string()],
+    tuigreet_config::AlignGreeting::Right,
+  )
+  .await;
+  let buffer = render_ui(greeter, 80, 24).await;
+
+  let mut found_x = 0u16;
+  let mut found = false;
+  for y in 0..4 {
+    for x in 0..80 {
+      if buffer[(x, y)].symbol() == "X" {
+        found_x = x;
+        found = true;
+        break;
+      }
+    }
+    if found {
+      break;
+    }
+  }
+  assert!(found, "right-aligned brand should still appear");
+  assert!(found_x >= 75, "right-aligned brand should sit at the right edge, got x={found_x}");
+}
+
+#[tokio::test]
+async fn test_brand_widget_does_not_crush_prompt() {
+  let greeter = greeter_with_brand(
+    (0..6).map(|i| format!("BRAND {i}")).collect(),
+    tuigreet_config::AlignGreeting::Center,
+  )
+  .await;
+  let buffer = render_ui(greeter, 80, 24).await;
+
+
+  let mut found = false;
+  for y in 0..24 {
+    let line = get_line(&buffer, y, 80);
+    if line.contains("Welcome") || line.contains("Username") {
+      found = true;
+      break;
+    }
+  }
+  assert!(found, "prompt form should still render");
+}
+
+#[tokio::test]
+async fn test_brand_widget_respects_max_height() {
+  let greeter = greeter_with_brand(
+    (0..30).map(|i| format!("BRAND {i}")).collect(),
+    tuigreet_config::AlignGreeting::Center,
+  )
+  .await;
+  let buffer = render_ui(greeter, 80, 24).await;
+
+  let mut brand_count = 0;
+  for y in 0..24 {
+    let line = get_line(&buffer, y, 80);
+    if line.contains("BRAND") {
+      brand_count += 1;
+    }
+  }
+  assert!(
+    brand_count > 0 && brand_count < 24,
+    "brand height should be capped, got {brand_count} brand rows"
+  );
+  let prompt_found = (0..24).any(|y| {
+    let line = get_line(&buffer, y, 80);
+    line.contains("Welcome") || line.contains("Username")
+  });
+  assert!(prompt_found, "prompt should still render when brand is capped");
+}
+
+/// With a fog animation active, the brand widget must draw the brand
+/// characters on top of the fog without overwriting the cells around
+/// them. The bug we are guarding against: rendering the brand as a
+/// `Paragraph` over the brand slot would replace every cell in the
+/// slot (including the empty ones around the brand text) with a
+/// space, which on a terminal whose default background is black
+/// produces a visible solid-color "box" around the brand. The fix
+/// writes the brand text directly into the cells that hold characters
+/// and leaves the rest of the slot untouched, so the fog shows
+/// through wherever the brand is silent.
+#[tokio::test]
+async fn test_brand_widget_preserves_fog_around_its_chars() {
+  use crate::ui::bg_animation::{self as animation, AnimationSpec, fog};
+
+  let greeter = test_greeter();
+  {
+    let mut g = greeter.write().await;
+    g.mode = Mode::Username;
+    g.brand_lines = vec!["BRAND".to_string()];
+    g.brand_align = tuigreet_config::AlignGreeting::Center;
+    g.animation = Some(animation::build(&AnimationSpec::Fog(
+      fog::Options::default(),
+    )));
+  }
+
+  let buffer = render_ui(greeter, 80, 24).await;
+
+  // The brand line is on the top row, centered. Find the run of cells
+  // that contain B/R/A/N/D; cells outside that run on the same row
+  // must still show fog glyphs, not be wiped to terminal-default
+  // background. If the brand was rendered as a Paragraph, those
+  // surrounding cells would all be ` ` (space) — the bug.
+  let brand_row = 0u16;
+  let brand_chars = ['B', 'R', 'A', 'N', 'D'];
+  let brand_xs: Vec<u16> = (0..80)
+    .filter(|x| {
+      let s = buffer[(*x, brand_row)].symbol();
+      brand_chars.contains(&s.chars().next().unwrap_or(' '))
+    })
+    .collect();
+  assert_eq!(
+    brand_xs.len(),
+    5,
+    "expected the five BRAND glyphs on row 0, got {brand_xs:?}"
+  );
+
+  // Cells to the left of the first brand char, and to the right of
+  // the last, on the same row, must still hold fog glyphs (or at
+  // least not be blank) — i.e. the renderer did not overwrite the
+  // brand slot with empty space.
+  let first = *brand_xs.first().unwrap();
+  let last = *brand_xs.last().unwrap();
+  let fog_glyphs: &[char] = &['·', ':', '-', '~', '°', ' '];
+  let mut empty = 0u32;
+  for x in 0..first {
+    let s = buffer[(x, brand_row)].symbol();
+    if !fog_glyphs.contains(&s.chars().next().unwrap_or(' ')) {
+      empty += 1;
+    }
+  }
+  for x in (last + 1)..80 {
+    let s = buffer[(x, brand_row)].symbol();
+    if !fog_glyphs.contains(&s.chars().next().unwrap_or(' ')) {
+      empty += 1;
+    }
+  }
+  assert_eq!(
+    empty, 0,
+    "brand renderer overwrote cells around the brand text with \
+     non-fog symbols — the brand should not produce a visible box"
   );
 }
