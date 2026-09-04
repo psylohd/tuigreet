@@ -17,14 +17,29 @@ impl SafeDebug for Request {
   }
 }
 
+/// Look up a message by ID from the compiled Fluent localization bundle.
+///
+/// If the message ID is not found (e.g. a new key added to source but not yet
+/// added to the `.ftl` file), returns the bare ID itself so the UI remains
+/// usable instead of panicking.
 macro_rules! fl {
   ($message_id:literal) => {{
-    $crate::ui::MESSAGES.get($message_id).replace(&['\u{2068}', '\u{2069}'], "")
+    let s = $crate::ui::MESSAGES.get($message_id);
+    if s.is_empty() {
+      $message_id.to_string()
+    } else {
+      s
+    }
   }};
 
   ($message_id:literal, $($key:ident = $value:expr),*) => {{
     let mut args = std::collections::HashMap::new();
     $(args.insert(stringify!($key), $value);)*
-    $crate::ui::MESSAGES.get_args($message_id, args).replace(&['\u{2068}', '\u{2069}'], "")
+    let s = $crate::ui::MESSAGES.get_args($message_id, args);
+    if s.is_empty() {
+      $message_id.to_string()
+    } else {
+      s
+    }
   }};
 }
