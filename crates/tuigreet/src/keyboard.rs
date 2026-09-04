@@ -387,7 +387,20 @@ pub async fn handle(
       }
     },
 
-    // Do not handle any other controls keybindings
+    // Ctrl+C clears the current input buffer (password or command).
+    KeyEvent {
+      code: KeyCode::Char('c'),
+      modifiers: KeyModifiers::CONTROL,
+      ..
+    } => {
+      match greeter.mode {
+        Mode::Password | Mode::Command => {
+          greeter.buffer.clear();
+          greeter.cursor_offset = 0;
+        },
+        _ => {},
+      }
+    },
     KeyEvent {
       modifiers: KeyModifiers::CONTROL,
       ..
@@ -438,6 +451,11 @@ async fn insert_key(greeter: &mut Greeter, c: char) {
     Mode::Command => greeter.buffer = value,
     _ => {},
   }
+
+  // Notify the animation that the user is typing so it can speed up.
+  if let Some(anim) = &mut greeter.animation {
+    anim.on_activity();
+  }
 }
 
 // Handle deletion of characters from a prompt into the proper buffer, depending
@@ -476,6 +494,11 @@ async fn delete_key(greeter: &mut Greeter, key: KeyCode) {
 
     if key == KeyCode::Delete {
       greeter.cursor_offset += 1;
+    }
+
+    // Notify the animation that the user is typing so it can speed up.
+    if let Some(anim) = &mut greeter.animation {
+      anim.on_activity();
     }
   }
 }

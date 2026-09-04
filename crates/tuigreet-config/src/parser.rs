@@ -319,18 +319,6 @@ fn apply_config_layer(dest: &mut Config, src: Config) {
   if src.background.matrix.mutate_chance.is_some() {
     dest.background.matrix.mutate_chance = src.background.matrix.mutate_chance;
   }
-  if src.background.aurora.color_a.is_some() {
-    dest.background.aurora.color_a = src.background.aurora.color_a.clone();
-  }
-  if src.background.aurora.color_b.is_some() {
-    dest.background.aurora.color_b = src.background.aurora.color_b.clone();
-  }
-  if src.background.aurora.coverage.is_some() {
-    dest.background.aurora.coverage = src.background.aurora.coverage;
-  }
-  if src.background.aurora.speed.is_some() {
-    dest.background.aurora.speed = src.background.aurora.speed;
-  }
   if src.background.starfield.min_speed.is_some() {
     dest.background.starfield.min_speed = src.background.starfield.min_speed;
   }
@@ -343,21 +331,6 @@ fn apply_config_layer(dest: &mut Config, src: Config) {
   if src.background.starfield.palette.is_some() {
     dest.background.starfield.palette =
       src.background.starfield.palette.clone();
-  }
-  if src.background.constellation.star_color.is_some() {
-    dest.background.constellation.star_color =
-      src.background.constellation.star_color.clone();
-  }
-  if src.background.constellation.edge_color.is_some() {
-    dest.background.constellation.edge_color =
-      src.background.constellation.edge_color.clone();
-  }
-  if src.background.constellation.dim_color.is_some() {
-    dest.background.constellation.dim_color =
-      src.background.constellation.dim_color.clone();
-  }
-  if src.background.constellation.speed.is_some() {
-    dest.background.constellation.speed = src.background.constellation.speed;
   }
   if src.background.fog.speed.is_some() {
     dest.background.fog.speed = src.background.fog.speed;

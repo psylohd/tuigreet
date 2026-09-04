@@ -193,16 +193,52 @@ pub fn apply_output_config(
   }
 
   // Find the output to derive sizing from.
+  //
+  // Priority:
+  //  1. An explicitly-configured primary output (primary = true).
+  //  2. The first explicitly-configured enabled output.
+  //  3. When no [[outputs]] are configured at all: the connected output
+  //     with the largest pixel area (native resolution). This handles
+  //     multi-monitor setups where the user has not explicitly listed outputs.
   let primary = outputs
     .iter()
     .find(|o| o.enabled && o.primary)
     .or_else(|| outputs.iter().find(|o| o.enabled));
 
-  let Some(primary) = primary else {
-    tracing::warn!(
-      "No enabled output found in [[outputs]] config; skipping terminal resize"
-    );
-    return;
+  let primary = match primary {
+    Some(p) => p.clone(),
+    None => {
+      // No [[outputs]] configured — auto-detect the largest connected monitor.
+      let all_outputs = enumerate_outputs();
+      let largest = all_outputs
+        .into_iter()
+        .filter(|o| o.connected)
+        .filter_map(|o| o.native_resolution.map(|res| (o.connector.clone(), res)))
+        .max_by_key(|(_, (w, h))| u32::from(*w) * u32::from(*h));
+
+      match largest {
+        Some((connector, (w, h))) => {
+          tracing::info!(
+            "No [[outputs]] configured; auto-selected largest connected output: \
+             {} ({}x{})",
+            connector,
+            w,
+            h
+          );
+          OutputConfig {
+            connector,
+            enabled: true,
+            primary: false,
+          }
+        },
+        None => {
+          tracing::warn!(
+            "No connected outputs found in /sys/class/drm/; skipping terminal resize"
+          );
+          return;
+        },
+      }
+    },
   };
 
   tracing::info!(

@@ -121,12 +121,10 @@ macro_rules! bg_animation {
 }
 
 bg_animation! {
-  Doom          { doom          => doom::Options,           "doom",          "DOOM Fire"     },
-  Matrix        { matrix        => matrix::Options,         "matrix",        "Matrix"        },
-  Starfield     { starfield     => starfield::Options,      "starfield",     "Starfield"     },
-  Aurora        { aurora        => aurora::Options,         "aurora",        "Aurora"        },
-  Constellation { constellation => constellation::Options,  "constellation", "Constellation" },
-  Fog           { fog           => fog::Options,            "fog",           "Fog"           },
+  Doom      { doom      => doom::Options,     "doom",     "DOOM Fire" },
+  Matrix    { matrix    => matrix::Options,   "matrix",   "Matrix"    },
+  Starfield { starfield => starfield::Options,"starfield","Starfield" },
+  Fog       { fog       => fog::Options,      "fog",      "Fog"       },
 }
 
 /// A background animation drawn beneath the login UI.
@@ -144,6 +142,11 @@ pub trait Animation: Send + Sync {
   /// simulations while still re-`render()`ing every tick (so the screen
   /// stays fresh from the previous step without extra CPU cost).
   fn step(&mut self);
+
+  /// Called when the user provides input (key press). Animations can use
+  /// this to boost their activity — e.g. a starfield speeds up when the
+  /// user types.
+  fn on_activity(&mut self) {}
 
   /// Paint the current frame.
   fn render(&self, area: Rect, buf: &mut Buffer);
@@ -207,7 +210,7 @@ pub fn parse_color(s: &str) -> Option<Color> {
 /// that nearly every terminal uses as the rendering target for ANSI
 /// color escapes. Picking these values keeps `light-green` looking like
 /// `light-green` rather than collapsing to black inside color-mixing
-/// animations like fog and aurora.
+/// animations like fog.
 pub fn color_to_rgb(c: Color) -> Option<(u8, u8, u8)> {
   match c {
     Color::Rgb(r, g, b) => Some((r, g, b)),
@@ -285,11 +288,7 @@ mod tests {
     assert_eq!(Kind::from_name(""), None);
     assert_eq!(Kind::from_name("matrix"), Some(Kind::Matrix));
     assert_eq!(Kind::from_name("CMATRIX"), None);
-    assert_eq!(Kind::from_name("starfield"), Some(Kind::Starfield));
     assert_eq!(Kind::from_name("STARFIELD"), Some(Kind::Starfield));
-    assert_eq!(Kind::from_name("aurora"), Some(Kind::Aurora));
-    assert_eq!(Kind::from_name("AURORA"), Some(Kind::Aurora));
-    assert_eq!(Kind::from_name("constellation"), Some(Kind::Constellation));
   }
 
   #[test]

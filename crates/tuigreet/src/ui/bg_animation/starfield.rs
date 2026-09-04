@@ -33,6 +33,15 @@ const BRIGHTNESS_BANDS: u8 = 4;
 /// requiring per-frame animation of the symbol itself.
 const GLYPHS: &[char] = &['·', '∙', '•', '✦', '✶', '⋆', '*'];
 
+/// When boost is at its maximum (1.0), speed is multiplied by this factor.
+const BOOST_MULT: f32 = 8.0;
+
+/// How much boost decays per frame. 0.03 ≈ halves in ~23 frames at 30 FPS.
+const BOOST_FRICTION: f32 = 0.03;
+
+/// How much boost each keystroke adds. Accumulates up to BOOST_MULT.
+const BOOST_INCREMENT: f32 = 0.3;
+
 /// Configurable parameters for the starfield effect.
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -95,6 +104,10 @@ pub struct Starfield {
   stars:  Vec<Star>,
   opts:   Options,
   rng:    StdRng,
+  /// Current boost level. Ramps to 1.0 on activity, decays per frame via
+  /// friction. Drives a speed multiplier: effective_speed = speed * (1 + boost
+  /// * BOOST_MULT).
+  boost:  f32,
 }
 
 impl Starfield {
@@ -113,11 +126,12 @@ impl Starfield {
       .unwrap_or(0);
 
     Self {
-      width: 0,
+      width:  0,
       height: 0,
       stars: Vec::new(),
       opts,
       rng: StdRng::seed_from_u64(seed),
+      boost: 0.0,
     }
   }
 
@@ -186,13 +200,20 @@ impl Animation for Starfield {
     let w = self.width as f32;
     let h = self.height as i32;
     let palette_max = self.opts.palette.len() as u8;
+    // Speed multiplier from current boost: ranges from 1x (boost=0) to
+    // 1+BOOST_MULT x (boost=1).
+    let speed_mult = 1.0 + self.boost * BOOST_MULT;
+
+    // Decay boost toward zero via friction so the acceleration naturally
+    // winds back down between keystrokes.
+    self.boost = (self.boost - BOOST_FRICTION).max(0.0);
 
     // Snapshot the count to release the borrow on `self.stars` between
     // iterations.
     let n = self.stars.len();
     for i in 0..n {
       let star = self.stars[i];
-      let new_x = star.x + star.speed;
+      let new_x = star.x + star.speed * speed_mult;
 
       // Drift off the trailing edge? Respawn at the leading edge. This
       // is what makes the effect continuous: the population never
@@ -233,6 +254,12 @@ impl Animation for Starfield {
         glyph: star.glyph,
       };
     }
+  }
+
+  fn on_activity(&mut self) {
+    // Each keystroke adds BOOST_INCREMENT, capped at 1.0 (full boost).
+    // Rapid typing accumulates toward max; gaps let friction drain it.
+    self.boost = (self.boost + BOOST_INCREMENT).min(1.0);
   }
 
   fn render(&self, area: Rect, buf: &mut Buffer) {

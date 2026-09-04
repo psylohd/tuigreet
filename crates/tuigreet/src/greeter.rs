@@ -853,7 +853,7 @@ impl Greeter {
     opts.optopt(
       "",
       "background",
-      "background animation to render behind the login UI ('doom', 'matrix', 'starfield', 'aurora', 'constellation', 'fog', or 'none')",
+      "background animation to render behind the login UI ('doom', 'matrix', 'starfield', 'fog', or 'none')",
       "NAME",
     );
     opts.optopt(
@@ -1207,7 +1207,7 @@ impl Greeter {
     &mut self,
     cfg: &tuigreet_config::BackgroundConfig,
   ) {
-    use crate::ui::bg_animation::{Kind, aurora, constellation, doom, fog, matrix, starfield};
+    use crate::ui::bg_animation::{Kind, doom, fog, matrix, starfield};
 
     let Some(kind) = cfg.kind.as_deref().and_then(Kind::from_name) else {
       if let Some(name) = cfg.kind.as_deref()
@@ -1282,24 +1282,6 @@ impl Greeter {
           max_speed:    cfg.starfield.max_speed.unwrap_or(d.max_speed),
           twinkle_rate: cfg.starfield.twinkle_rate.unwrap_or(d.twinkle_rate),
           palette,
-        })
-      },
-      Kind::Aurora => {
-        let d = aurora::Options::default();
-        AnimationSpec::Aurora(aurora::Options {
-          color_a:  parse(&cfg.aurora.color_a, d.color_a),
-          color_b:  parse(&cfg.aurora.color_b, d.color_b),
-          coverage: cfg.aurora.coverage.unwrap_or(d.coverage),
-          speed:    cfg.aurora.speed.unwrap_or(d.speed),
-        })
-      },
-      Kind::Constellation => {
-        let d = constellation::Options::default();
-        AnimationSpec::Constellation(constellation::Options {
-          star_color: parse(&cfg.constellation.star_color, d.star_color),
-          edge_color: parse(&cfg.constellation.edge_color, d.edge_color),
-          dim_color:  parse(&cfg.constellation.dim_color, d.dim_color),
-          speed:      cfg.constellation.speed.unwrap_or(d.speed),
         })
       },
       Kind::Fog => {

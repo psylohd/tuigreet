@@ -575,16 +575,9 @@ pub struct BackgroundConfig {
   #[serde(default)]
   pub matrix: MatrixConfig,
 
-  /// Parameters for the aurora borealis effect.
-  #[serde(default)]
-  pub aurora: AuroraConfig,
-
+  /// Parameters for the drifting starfield effect.
   #[serde(default)]
   pub starfield: StarfieldConfig,
-
-  /// Parameters for the constellation map effect.
-  #[serde(default)]
-  pub constellation: ConstellationConfig,
 
   /// Parameters for the drifting fog effect.
   #[serde(default)]
@@ -654,27 +647,6 @@ pub struct MatrixConfig {
   pub mutate_chance: Option<f32>,
 }
 
-/// Parameters for the aurora borealis animation.
-#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
-pub struct AuroraConfig {
-  /// Color of the first curtain at peak intensity. Accepts `#RRGGBB`,
-  /// `0xRRGGBB`, or any ratatui color name.
-  #[serde(default)]
-  pub color_a: Option<String>,
-
-  /// Color of the second curtain at peak intensity.
-  #[serde(default)]
-  pub color_b: Option<String>,
-
-  /// Vertical band coverage, `0.0..=1.0`. `0.6` means curtains fade
-  /// to zero by 60% of the way down — the bottom 40% stays dark.
-  #[serde(default)]
-  pub coverage: Option<f32>,
-
-  /// Drift speed multiplier. `1.0` is default; raise for faster.
-  #[serde(default)]
-  pub speed: Option<f32>,
-}
 
 /// Parameters for the drifting starfield animation.
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
@@ -700,28 +672,6 @@ pub struct StarfieldConfig {
   /// frame. Accepts any color string the rest of the config accepts.
   #[serde(default)]
   pub palette: Option<Vec<String>>,
-}
-
-/// Parameters for the constellation map animation.
-#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
-pub struct ConstellationConfig {
-  /// Color of the static star dots.
-  #[serde(default)]
-  pub star_color: Option<String>,
-
-  /// Color of fully-bright edges. Dimmed edges blend toward
-  /// `dim_color`.
-  #[serde(default)]
-  pub edge_color: Option<String>,
-
-  /// Color that a fully-dimmed edge fades to. `Color::Reset` is
-  /// accepted (use `"reset"` or `"default"`).
-  #[serde(default)]
-  pub dim_color: Option<String>,
-
-  /// Shimmer speed multiplier. `1.0` is default.
-  #[serde(default)]
-  pub speed: Option<f32>,
 }
 
 /// Parameters for the drifting fog animation.
